@@ -1,0 +1,131 @@
+---
+title: "Alternative Turnout Models - Fit to Monroe County"
+output: html_notebook
+---
+```{r}
+library(randomForest)
+library(ROCR)
+```
+
+
+
+```{r}
+monroe_data <- as.data.frame(read.csv("/Users/isaac/Dropbox (UFL)//incubator/monroe_data.csv"))
+test_election = monroe_data['X2014.11']
+train_election = monroe_data['X2010.11']
+
+red_train_data <- as.data.frame(read.csv("/Users/isaac/Dropbox (UFL)//incubator/monroe_red_train_dat.csv"))[,-1]
+head(red_train_data)
+
+```
+
+#Random Forest
+
+```{r}
+
+mtry.grid <- data.frame(mtry = c(2, 4, 8, 16, 20))
+
+RF_tune <- randomForest(x = red_train_data, y= as.factor(train_election[[1]]), mtry = mtry.grid$mtry[3])
+
+preds <- RF_tune$predicted
+test_election <- as.factor(test_election[[1]])
+
+misclassRF <- mean(preds != test_election)
+probs <- predict(RF_tune, newdata = red_train_data, type="prob")[,2]
+
+
+pred <- prediction(probs, test_election)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+# I know, the following code is bizarre. Just go with it.
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+roc.data <- data.frame(fpr=unlist(perf@x.values),
+           tpr=unlist(perf@y.values),
+           model="RF")
+  
+ggplot(roc.data, aes(x=fpr, ymin=0, ymax=tpr)) +
+  geom_ribbon(alpha=0.2) +
+  geom_line(aes(y=tpr)) +
+  xlab("False Postive Rate") +
+  ylab("True Positive Rate") +
+  geom_abline(slope=1, colour = "red") +
+  ggtitle(paste("Random forest ROC Curve w/ AUC=", round(auc,3)))+
+  theme_classic()
+
+
+```
+
+
+#GBM
+
+```{r}
+library(gbm)
+#train_election <- as.factor(train_election[[1]])
+                            
+gbm_tune <- gbm.fit(x=red_train_data,  y=train_election[[1]], verbose = F, n.trees = 500)
+
+preds <- round(predict(gbm_tune,n.trees = 500, type="response"),0)
+test_election <- monroe_data['X2014.11'][[1]]
+
+misclassRF <- mean(preds != test_election)
+probs <- predict(gbm_tune, newdata = red_train_data, n.trees = 200, type="response")
+
+
+pred <- prediction(probs, test_election)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+# I know, the following code is bizarre. Just go with it.
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+roc.data <- data.frame(fpr=unlist(perf@x.values),
+           tpr=unlist(perf@y.values),
+           model="RF")
+  
+ggplot(roc.data, aes(x=fpr, ymin=0, ymax=tpr)) +
+  geom_ribbon(alpha=0.2) +
+  geom_line(aes(y=tpr)) +
+  xlab("False Postive Rate") +
+  ylab("True Positive Rate") +
+  geom_abline(slope=1, colour = "red") +
+  ggtitle(paste("GBM ROC Curve w/ AUC=", round(auc,3)))+
+  theme_classic()
+
+
+```
+
+
+#SVM
+
+```{r}
+library(kernlab)
+#train_election <- as.factor(train_election[[1]])
+                            
+svm_tune <- ksvm(x=as.matrix(red_train_data),  y=as.numeric(train_election[[1]]), kernel="rbfdot")
+
+probs <- predict(svm_tune, newdata = red_train_data, type="response")
+preds <- round(probs,0)
+
+test_election <- monroe_data['X2014.11'][[1]]
+
+misclassRF <- mean(preds != test_election)
+
+
+pred <- prediction(probs, test_election)
+perf <- performance(pred, measure = "tpr", x.measure = "fpr")
+# I know, the following code is bizarre. Just go with it.
+auc <- performance(pred, measure = "auc")
+auc <- auc@y.values[[1]]
+roc.data <- data.frame(fpr=unlist(perf@x.values),
+           tpr=unlist(perf@y.values),
+           model="RF")
+  
+ggplot(roc.data, aes(x=fpr, ymin=0, ymax=tpr)) +
+  geom_ribbon(alpha=0.2) +
+  geom_line(aes(y=tpr)) +
+  xlab("False Postive Rate") +
+  ylab("True Positive Rate") +
+  geom_abline(slope=1, colour = "red") +
+  ggtitle(paste("SVM ROC Curve w/ AUC=", round(auc,3)))+
+  theme_classic()
+
+
+```
